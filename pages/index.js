@@ -13,6 +13,98 @@ import {
 const BASELINE_2025 = 850.19;
 const ALERT_LEVEL = 1100;
 
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  if (h < 1) return 'just now';
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const FEED_COLORS = { 'HRC Steel': '#f59e0b', 'Steel Market': '#3b82f6', 'Tariffs & Trade': '#a78bfa' };
+
+function NewsSection() {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState('All');
+
+  useEffect(() => {
+    fetch('/api/hrc-news')
+      .then((r) => r.json())
+      .then(({ news: n, error: e }) => {
+        if (e) throw new Error(e);
+        setNews(n || []);
+        setLoading(false);
+      })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  }, []);
+
+  const tabs = ['All', 'HRC Steel', 'Steel Market', 'Tariffs & Trade'];
+  const filtered = filter === 'All' ? news : news.filter((n) => n.feed === filter);
+
+  return (
+    <div className="bg-[#1a1a1f] border border-[#2a2a32] rounded-xl p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-base font-semibold text-white">Market News</h2>
+        <div className="flex flex-wrap gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                filter === t ? 'bg-amber-500 text-black' : 'bg-[#2a2a32] text-slate-300 hover:bg-[#3a3a44]'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading && (
+        <div className="flex items-center justify-center py-10">
+          <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      {error && <p className="text-red-400 text-sm py-4">{error}</p>}
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-slate-500 text-sm py-4">No news found.</p>
+      )}
+      {!loading && !error && (
+        <ul className="divide-y divide-[#2a2a32]">
+          {filtered.map((item, i) => (
+            <li key={i} className="py-3 flex flex-col gap-1">
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-slate-100 hover:text-amber-400 transition-colors leading-snug"
+              >
+                {item.title}
+              </a>
+              <div className="flex items-center gap-2 text-xs">
+                {item.feed && (
+                  <span
+                    className="px-1.5 py-0.5 rounded font-medium"
+                    style={{ color: FEED_COLORS[item.feed] || '#94a3b8', background: 'rgba(255,255,255,0.05)' }}
+                  >
+                    {item.feed}
+                  </span>
+                )}
+                {item.source && <span className="text-slate-500">{item.source}</span>}
+                <span className="text-slate-600 ml-auto">{timeAgo(item.pubDate)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const RANGES = [
   { label: 'Since Jan 2026', key: '2026' },
   { label: 'Since 2025', key: '2025' },
@@ -423,6 +515,8 @@ export default function Home() {
             />
           </>
         )}
+
+        <NewsSection />
 
         {/* Footer */}
         <footer className="border-t border-[#2a2a32] pt-4 pb-2 text-xs text-slate-500 flex flex-wrap justify-between gap-2">
