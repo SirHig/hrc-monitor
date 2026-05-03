@@ -88,15 +88,28 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-function ChartSection({ title, data, dataKey, lineColor, refLine, refLabel, yLabel, yDomain }) {
+function ChartSection({ title, dailyData, monthlyData, dataKey, lineColor, refLine, refLabel, yLabel, yDomain }) {
   const [range, setRange] = useState('2026');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  // slider indices into the active dataset
+  const [sliderStart, setSliderStart] = useState(0);
+  const [sliderEnd, setSliderEnd] = useState(0);
 
-  const filtered = useMemo(
-    () => filterByRange(data, range, customStart, customEnd),
-    [data, range, customStart, customEnd]
-  );
+  // pick dataset: monthly only for 'max', daily otherwise
+  const data = range === 'max' ? monthlyData : dailyData;
+
+  // reset sliders when data or range changes
+  useEffect(() => {
+    setSliderStart(0);
+    setSliderEnd(Math.max(0, data.length - 1));
+  }, [range, data.length]);
+
+  const filtered = useMemo(() => {
+    if (!data.length) return data;
+    if (range === '2026') return data.filter((d) => d.date >= '2026-01-01');
+    if (range === '2025') return data.filter((d) => d.date >= '2025-01-01');
+    if (range === 'custom') return data.slice(sliderStart, sliderEnd + 1);
+    return data; // max
+  }, [data, range, sliderStart, sliderEnd]);
 
   const tickCount = Math.min(filtered.length, 8);
 
@@ -127,26 +140,37 @@ function ChartSection({ title, data, dataKey, lineColor, refLine, refLabel, yLab
         </div>
       </div>
 
-      {range === 'custom' && (
-        <div className="flex flex-wrap gap-3 mb-4">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400">From</label>
+      {range === 'custom' && data.length > 1 && (
+        <div className="mb-4 space-y-2 px-1">
+          <div className="flex justify-between text-xs text-slate-400">
+            <span>{fmtDate(data[sliderStart]?.date)}</span>
+            <span>{fmtDate(data[sliderEnd]?.date)}</span>
+          </div>
+          <div className="relative flex flex-col gap-2">
             <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="bg-[#0f0f11] border border-[#2a2a32] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+              type="range"
+              min={0}
+              max={data.length - 1}
+              value={sliderStart}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (v < sliderEnd) setSliderStart(v);
+              }}
+              className="w-full accent-amber-500 h-1 bg-transparent"
+            />
+            <input
+              type="range"
+              min={0}
+              max={data.length - 1}
+              value={sliderEnd}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (v > sliderStart) setSliderEnd(v);
+              }}
+              className="w-full accent-amber-500 h-1 bg-transparent"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-400">To</label>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="bg-[#0f0f11] border border-[#2a2a32] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
+          <p className="text-xs text-slate-500 text-center">{filtered.length} data points</p>
         </div>
       )}
 
@@ -199,7 +223,8 @@ function ChartSection({ title, data, dataKey, lineColor, refLine, refLabel, yLab
 }
 
 export default function Home() {
-  const [rawData, setRawData] = useState([]);
+  const [dailyData, setDailyData] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
   const [fetchedAt, setFetchedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -210,8 +235,9 @@ export default function Home() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(({ data, fetchedAt: fa }) => {
-        setRawData(data || []);
+      .then(({ daily, monthly, fetchedAt: fa }) => {
+        setDailyData(daily || []);
+        setMonthlyData(monthly || []);
         setFetchedAt(fa);
         setLoading(false);
       })
@@ -223,25 +249,25 @@ export default function Home() {
 
   const indexedData = useMemo(
     () =>
-      rawData.map((d) => ({
+      dailyData.map((d) => ({
         ...d,
         index: d.close != null ? Math.round((d.close / BASELINE_2025) * 100 * 100) / 100 : null,
       })),
-    [rawData]
+    [dailyData]
   );
 
   const kpi = useMemo(() => {
-    if (!rawData.length) return null;
+    if (!dailyData.length) return null;
 
-    const last = rawData[rawData.length - 1];
-    const prev = rawData.length > 1 ? rawData[rawData.length - 2] : null;
+    const last = dailyData[dailyData.length - 1];
+    const prev = dailyData.length > 1 ? dailyData[dailyData.length - 2] : null;
 
     const dayChange = prev ? last.close - prev.close : 0;
     const dayChangePct = prev ? (dayChange / prev.close) * 100 : 0;
 
     const vsBaseline = ((last.close - BASELINE_2025) / BASELINE_2025) * 100;
 
-    const ytd = rawData.filter((d) => d.date >= '2026-01-01');
+    const ytd = dailyData.filter((d) => d.date >= '2026-01-01');
     const ytdFirst = ytd[0];
     const ytdChangePct = ytdFirst
       ? ((last.close - ytdFirst.close) / ytdFirst.close) * 100
@@ -372,7 +398,8 @@ export default function Home() {
             {/* Chart 1: Settlement Price */}
             <ChartSection
               title="Settlement Price (USD/T)"
-              data={rawData}
+              dailyData={dailyData}
+              monthlyData={monthlyData}
               dataKey="close"
               lineColor="#f59e0b"
               refLine={ALERT_LEVEL}
@@ -383,7 +410,11 @@ export default function Home() {
             {/* Chart 2: Indexed vs 2025 Baseline */}
             <ChartSection
               title="Indexed vs 2025 Baseline (2025 avg = 100)"
-              data={indexedData}
+              dailyData={indexedData}
+              monthlyData={monthlyData.map((d) => ({
+                ...d,
+                index: d.close != null ? Math.round((d.close / BASELINE_2025) * 100 * 100) / 100 : null,
+              }))}
               dataKey="index"
               lineColor="#3b82f6"
               refLine={100}
