@@ -183,7 +183,7 @@ function ChartSection({ title, data, dataKey, lineColor, refLine, refLabel, yLab
             />
           )}
           <Line
-            type="monotone"
+            type="linear"
             dataKey={dataKey}
             stroke={lineColor}
             dot={false}
