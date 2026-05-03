@@ -288,7 +288,7 @@ export default function Home() {
       ytdLow,
       aboveAlert,
     };
-  }, [rawData]);
+  }, [dailyData]);
 
   const lastUpdatedStr = fetchedAt
     ? new Date(fetchedAt).toLocaleString('en-US', {
