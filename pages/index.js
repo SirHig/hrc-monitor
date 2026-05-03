@@ -181,7 +181,7 @@ function ChartSection({ title, dailyData, monthlyData, dataKey, lineColor, refLi
             dataKey="date"
             tickFormatter={xTickFormatter}
             tick={{ fill: '#94a3b8', fontSize: 11 }}
-            tickCount={tickCount}
+            interval={Math.max(0, Math.floor(filtered.length / 8) - 1)}
             stroke="#2a2a32"
           />
           <YAxis
